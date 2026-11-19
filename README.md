@@ -1,6 +1,10 @@
-# newminhh
+# newminhh (`新明` — "New Tomorrow")
 
 **Container-less i386 (`ELFCLASS32`, `EM_386`) Compatibility System for x32-Only (`ELFCLASS32`, `EM_X86_64`, ILP32) Linux.**
+
+> **Visitor Entrypoint:** Start at **[`newminhh/docs`](https://github.com/newminhh/docs)** for the project overview, architecture reference, and VM/testing guides.
+>
+> **Meaning Behind the Name:** **`newminhh`** is named after **Tân Minh** commune (Hải Phòng, Vietnam), the author's home commune—translating to **"New Tomorrow"** in English and **新明** (*Xīn Míng*) in Simplified Chinese.
 
 `newminhh` runs unmodified 32-bit x86 Linux executables and shared libraries (`.so`) directly on a pure x32 Linux userspace whose kernel runs with `ia32_emulation=0` and `syscall.x32=y`—requiring zero `:i386` packages, zero `libc6-i386`, and zero `/lib/ld-linux.so.2`, while keeping native x32 shared libraries (`libc.so.6`, `libm.so.6`, `libnewminhh_compat.so`) page-cache shared across processes.
 
