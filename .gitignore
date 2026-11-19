@@ -1,0 +1,41 @@
+# Build & Staging Directories
+build/
+tests/**/build/
+tests/corpus/build/
+*.build/
+
+# Compiled Objects, Libraries, Executables & Archives (Strict Zero-Blob Policy)
+*.o
+*.a
+*.so
+*.so.*
+*.elf
+*.bin
+*.out
+*.qcow2
+*.img
+*.raw
+*.tar
+*.tar.*
+*.gz
+*.xz
+*.zst
+*.deb
+
+# VM Ephemeral State & Secrets
+vm/.state/
+
+# Python & Editor Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary Test Outputs
+*.log
+*.tmp
+/tmp/

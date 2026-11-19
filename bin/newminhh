@@ -1,0 +1,353 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Unified CLI entrypoint for newminhh (host x86_64 + Debian x32 guest).
+
+if [[ -n "${NEWMINHH_ROOT:-}" ]]; then
+    ROOT_DIR="$(readlink -f -- "${NEWMINHH_ROOT}")"
+else
+    SELF_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+    SELF_DIR="$(dirname -- "${SELF_PATH}")"
+    CANDIDATE_ROOT="$(cd -- "${SELF_DIR}/.." && pwd)"
+    if [[ -f "${CANDIDATE_ROOT}/Makefile" && -d "${CANDIDATE_ROOT}/src" ]]; then
+        ROOT_DIR="${CANDIDATE_ROOT}"
+    elif [[ -f "/root/newminhh/Makefile" && -d "/root/newminhh/src" ]]; then
+        ROOT_DIR="/root/newminhh"
+    else
+        echo "[newminhh] ERROR: cannot determine NEWMINHH_ROOT; set NEWMINHH_ROOT env var" >&2
+        exit 1
+    fi
+fi
+
+if [[ ! -f "${ROOT_DIR}/Makefile" || ! -d "${ROOT_DIR}/src" ]]; then
+    echo "[newminhh] ERROR: invalid NEWMINHH_ROOT '${ROOT_DIR}'" >&2
+    exit 1
+fi
+
+REMOTE_ROOT="${NEWMINHH_REMOTE_ROOT:-/root/newminhh}"
+
+err() {
+    echo "[newminhh] ERROR: $*" >&2
+}
+
+is_x32_env() {
+    local darch=""
+    darch="$(dpkg --print-architecture 2>/dev/null || true)"
+    if [[ "${darch}" == "x32" ]]; then
+        return 0
+    fi
+    if command -v gcc >/dev/null 2>&1; then
+        if gcc -dM -E - </dev/null 2>/dev/null | grep -q '__ILP32__'; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+usage() {
+    cat <<'EOF'
+newminhh — Container-less i386 Compatibility System for x32-Only Linux
+
+Usage:
+  newminhh <subcommand> [args...]
+
+Subcommands:
+  build [--install]
+      Build runtime/compat libraries, newminhh-run, and corpus (and install if --install).
+  patch [patcher-args...]
+      Run static/hybrid ELF patcher (wraps src/patcher/newminhh-patch via Docker re-env:latest).
+  run [--so <path> <sym> [args...]] <elf> [args...]
+      Execute an i386 ELF or shared object via newminhh-run (natively on x32, or synced into newminhh-x32 VM).
+  test [part1|part2|part3|part4|part5|all]
+      Execute the specified verification suite (default: all).
+  bench [bench-args...]
+      Run Part 5 /proc/<pid>/smaps, RSS/PSS sharing & execution timing benchmarks inside newminhh-x32.
+  vm <up|down|verify|exec|console> [args...]
+      Manage or execute commands inside the Debian x32 libvirt-qemu VM.
+  -h, --help
+      Show this help message.
+EOF
+}
+
+cmd_build() {
+    local do_install=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --install)
+                do_install=1
+                shift
+                ;;
+            -h|--help)
+                echo "Usage: newminhh build [--install]"
+                return 0
+                ;;
+            *)
+                err "unknown option '$1' for 'build'"
+                return 2
+                ;;
+        esac
+    done
+
+    if [[ "${do_install}" -eq 1 ]]; then
+        make -C "${ROOT_DIR}" install
+    else
+        make -C "${ROOT_DIR}" build
+    fi
+}
+
+cmd_patch() {
+    local patcher="${ROOT_DIR}/src/patcher/newminhh-patch"
+    if [[ ! -x "${patcher}" ]]; then
+        err "patcher not found or not executable: ${patcher}"
+        return 1
+    fi
+    if is_x32_env && ! command -v docker >/dev/null 2>&1; then
+        err "'patch' requires x86_64 host with Docker (re-env:latest)"
+        return 1
+    fi
+    exec "${patcher}" "$@"
+}
+
+find_x32_runner() {
+    if [[ -x "/usr/local/bin/newminhh-run" ]]; then
+        printf '%s' "/usr/local/bin/newminhh-run"
+        return 0
+    fi
+    if command -v newminhh-run >/dev/null 2>&1; then
+        command -v newminhh-run
+        return 0
+    fi
+    if [[ -x "${ROOT_DIR}/src/dbt/newminhh-run" ]]; then
+        printf '%s' "${ROOT_DIR}/src/dbt/newminhh-run"
+        return 0
+    fi
+    return 1
+}
+
+cmd_run() {
+    if [[ $# -eq 0 ]]; then
+        err "'run' requires <elf> [args...] or --so <path> <sym> [args...]"
+        return 2
+    fi
+    if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        echo "Usage: newminhh run [--so <path> <sym> [args...]] <elf> [args...]"
+        return 0
+    fi
+
+    local is_so=0
+    local target_file=""
+    local sym_name=""
+    local -a extra_args=()
+
+    if [[ "$1" == "--so" ]]; then
+        is_so=1
+        if [[ $# -lt 3 ]]; then
+            err "'run --so' requires <path> <sym> [args...]"
+            return 2
+        fi
+        target_file="$2"
+        sym_name="$3"
+        shift 3
+        extra_args=("$@")
+    else
+        target_file="$1"
+        shift
+        extra_args=("$@")
+    fi
+
+    if [[ ! -e "${target_file}" ]]; then
+        err "target file does not exist: ${target_file}"
+        return 1
+    fi
+    if [[ ! -f "${target_file}" ]]; then
+        err "target is not a regular file: ${target_file}"
+        return 1
+    fi
+
+    if is_x32_env; then
+        local runner=""
+        if ! runner="$(find_x32_runner)"; then
+            err "newminhh-run not found; run 'newminhh build --install' first"
+            return 1
+        fi
+        if [[ "${is_so}" -eq 1 ]]; then
+            exec "${runner}" --so "${target_file}" "${sym_name}" "${extra_args[@]}"
+        else
+            exec "${runner}" "${target_file}" "${extra_args[@]}"
+        fi
+    fi
+
+    local vm_exec="${ROOT_DIR}/vm/vm-exec.sh"
+    if [[ ! -x "${vm_exec}" ]]; then
+        err "vm-exec.sh not found: ${vm_exec}"
+        return 1
+    fi
+
+    local abs_target target_dir target_base
+    abs_target="$(readlink -f -- "${target_file}")"
+    target_dir="$(dirname -- "${abs_target}")"
+    target_base="$(basename -- "${abs_target}")"
+
+    local remote_dir=""
+    local cleanup_remote=0
+    if [[ "${abs_target}" == "${ROOT_DIR}/"* ]]; then
+        local rel_path rel_dir
+        rel_path="${abs_target#${ROOT_DIR}/}"
+        rel_dir="$(dirname -- "${rel_path}")"
+        remote_dir="${REMOTE_ROOT}/${rel_dir}"
+        "${vm_exec}" --sync "${target_dir}" "${remote_dir}" >/dev/null
+    else
+        remote_dir="/tmp/newminhh_run_$$"
+        cleanup_remote=1
+        "${vm_exec}" -- mkdir -p "${remote_dir}"
+        tar -C "${target_dir}" -cf - "${target_base}" | "${vm_exec}" -- tar -C "${remote_dir}" -xf -
+    fi
+
+    local -a remote_cmd=(newminhh-run)
+    if [[ "${is_so}" -eq 1 ]]; then
+        remote_cmd+=(--so "./${target_base}" "${sym_name}")
+    else
+        remote_cmd+=("./${target_base}")
+    fi
+    if [[ ${#extra_args[@]} -gt 0 ]]; then
+        remote_cmd+=("${extra_args[@]}")
+    fi
+
+    local cmd_str=""
+    printf -v cmd_str '%q ' "${remote_cmd[@]}"
+
+    set +e
+    "${vm_exec}" -- bash -c "cd $(printf '%q' "${remote_dir}") && ${cmd_str}"
+    local rc=$?
+    set -e
+
+    if [[ "${cleanup_remote}" -eq 1 ]]; then
+        "${vm_exec}" -- rm -rf "${remote_dir}" >/dev/null 2>&1 || true
+    fi
+    return "${rc}"
+}
+
+cmd_test() {
+    if [[ $# -gt 1 ]]; then
+        err "'test' accepts at most one suite argument [part1|part2|part3|part4|part5|all]"
+        return 2
+    fi
+    local suite="${1:-all}"
+    case "${suite}" in
+        -h|--help)
+            echo "Usage: newminhh test [part1|part2|part3|part4|part5|all]"
+            return 0
+            ;;
+        part1) make -C "${ROOT_DIR}" test-part1 ;;
+        part2) make -C "${ROOT_DIR}" test-part2 ;;
+        part3) make -C "${ROOT_DIR}" test-part3 ;;
+        part4) make -C "${ROOT_DIR}" test-part4 ;;
+        part5) make -C "${ROOT_DIR}" test-part5 ;;
+        all)   make -C "${ROOT_DIR}" test ;;
+        *)
+            err "unknown test suite '${suite}' (expected part1|part2|part3|part4|part5|all)"
+            return 2
+            ;;
+    esac
+}
+
+cmd_bench() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        echo "Usage: newminhh bench [bench_smaps.py args...]"
+        return 0
+    fi
+    if is_x32_env; then
+        local has_help=0
+        local has_patched=0
+        local has_hybrid=0
+        local arg=""
+        for arg in "$@"; do
+            case "${arg}" in
+                -h|--help)             has_help=1 ;;
+                --patched|--patched=*) has_patched=1 ;;
+                --hybrid|--hybrid=*)   has_hybrid=1 ;;
+            esac
+        done
+        if [[ "${has_help}" -eq 1 ]]; then
+            exec python3 "${ROOT_DIR}/tests/part5/bench_smaps.py" "$@"
+        fi
+        local -a extra_args=()
+        if [[ "${has_patched}" -eq 0 ]]; then
+            if [[ ! -x /tmp/newminhh_bench_patched ]]; then
+                err "/tmp/newminhh_bench_patched not found; patch bench_workload on host first (e.g. 'make bench' or 'newminhh patch tests/corpus/build/i386/bench_workload -o ...') or pass --patched <path>"
+                return 1
+            fi
+            extra_args+=(--patched /tmp/newminhh_bench_patched)
+        fi
+        if [[ "${has_hybrid}" -eq 0 && -x /tmp/newminhh_bench_hybrid ]]; then
+            extra_args+=(--hybrid /tmp/newminhh_bench_hybrid)
+        fi
+        exec python3 "${ROOT_DIR}/tests/part5/bench_smaps.py" "${extra_args[@]}" "$@"
+    fi
+    exec bash "${ROOT_DIR}/tests/part5/run_part5_tests.sh" --bench-only -- "$@"
+}
+
+cmd_vm() {
+    if is_x32_env; then
+        err "'vm' subcommand must be invoked on the x86_64 host, not inside the x32 VM"
+        return 1
+    fi
+    if [[ $# -eq 0 ]]; then
+        err "'vm' requires a subcommand: up|down|verify|exec|console"
+        return 2
+    fi
+    local sub="$1"
+    shift
+    case "${sub}" in
+        -h|--help)
+            echo "Usage: newminhh vm <up|down|verify|exec|console> [args...]"
+            return 0
+            ;;
+        up)      exec bash "${ROOT_DIR}/vm/vm-up.sh" "$@" ;;
+        down)    exec bash "${ROOT_DIR}/vm/vm-down.sh" "$@" ;;
+        verify)  exec bash "${ROOT_DIR}/vm/vm-verify-x32.sh" "$@" ;;
+        exec)    exec bash "${ROOT_DIR}/vm/vm-exec.sh" "$@" ;;
+        console) exec bash "${ROOT_DIR}/vm/vm-console.sh" "$@" ;;
+        *)
+            err "unknown vm subcommand '${sub}' (expected up|down|verify|exec|console)"
+            return 2
+            ;;
+    esac
+}
+
+if [[ $# -eq 0 ]]; then
+    err "missing subcommand (run 'newminhh --help' for usage)"
+    exit 2
+fi
+
+SUBCMD="$1"
+shift
+
+case "${SUBCMD}" in
+    -h|--help|help)
+        usage
+        exit 0
+        ;;
+    build)
+        cmd_build "$@"
+        ;;
+    patch)
+        cmd_patch "$@"
+        ;;
+    run)
+        cmd_run "$@"
+        ;;
+    test)
+        cmd_test "$@"
+        ;;
+    bench)
+        cmd_bench "$@"
+        ;;
+    vm)
+        cmd_vm "$@"
+        ;;
+    *)
+        err "unknown subcommand '${SUBCMD}' (run 'newminhh --help' for usage)"
+        exit 2
+        ;;
+esac

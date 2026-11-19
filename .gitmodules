@@ -1,0 +1,21 @@
+[submodule "src/common"]
+	path = src/common
+	url = https://github.com/newminhh/common.git
+[submodule "src/compat"]
+	path = src/compat
+	url = https://github.com/newminhh/compat.git
+[submodule "src/dbt"]
+	path = src/dbt
+	url = https://github.com/newminhh/dbt.git
+[submodule "src/patcher"]
+	path = src/patcher
+	url = https://github.com/newminhh/patcher.git
+[submodule "docs"]
+	path = docs
+	url = https://github.com/newminhh/docs.git
+[submodule "tests"]
+	path = tests
+	url = https://github.com/newminhh/tests.git
+[submodule "vm"]
+	path = vm
+	url = https://github.com/newminhh/vm_test_scripts.git
