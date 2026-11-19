@@ -32,6 +32,13 @@ This umbrella repository (`newminhh/newminhh`) provides top-level build orchestr
 
 ## Quick Start
 
+> [!IMPORTANT]
+> **Kernel Requirements Notice (Mainline Linux `x32` ABI Removal in 2026):**
+> Mainline Linux moved in 2026 to deprecate and remove `CONFIG_X86_X32_ABI` ([Phoronix: *Linux x32 ABI in 2026*](https://www.phoronix.com/news/Linux-x32-ABI-2026), [LWN](https://lwn.net/Articles/1074897/)). To run `newminhh` natively or inside a guest VM, the target kernel **must**:
+> 1. Be compiled with **`CONFIG_X86_X32_ABI=y`** (or `CONFIG_X86_X32=y`) — e.g., Linux `3.4`–`7.2`, pre-removal Debian `7.3` `amd64` kernels, an LTS kernel (`6.1` / `6.6` / `6.12` / `6.18`) built with `CONFIG_X86_X32_ABI=y`, or a custom kernel with `x32` removal reverted.
+> 2. Be booted with **`syscall.x32=y`** on the kernel command line (plus **`ia32_emulation=0`** for pure `x32`-only isolation).
+> *(Note: When using the `vm/` KVM guest workflow, only the guest kernel inside `newminhh-x32` requires `CONFIG_X86_X32_ABI=y` + `syscall.x32=y`; the `x86_64` KVM host kernel does not need `x32` enabled.)*
+
 ### 1. Provision & Verify the Debian x32 VM (x86_64 Host)
 
 ```bash
