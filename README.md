@@ -109,3 +109,22 @@ This cross-compiles the i386 corpus (`tests/corpus`), syncs sources to `newminhh
 - [`docs/README.md`](https://github.com/newminhh/docs/blob/main/README.md) — Overview, installation, and CLI reference
 - [`docs/ARCHITECTURE.md`](https://github.com/newminhh/docs/blob/main/ARCHITECTURE.md) — ABI tables, register usage, memory layout, trampolines, syscalls, struct repacking, JIT emitter, and static ELF rewriting
 - [`docs/TESTING_AND_VM.md`](https://github.com/newminhh/docs/blob/main/TESTING_AND_VM.md) — VM provisioning scripts and Parts 1–5 verification & `/proc/<pid>/smaps` benchmarking suites
+
+---
+
+## Referenced Sources & Architectural Influences
+
+- **[Original Design Conversation (`share.google/aimode`)](https://share.google/aimode/7RVXOzvKN6OdZJ1Ft)** — Foundational blueprint for container-less `i386`-on-`x32` execution via shared in-process `x32` ABI thunking, hybrid static patching + `libnewminhh_compat.so`, bidirectional `.so` shims, 64-bit struct repacking, and runtime DBT fallback.
+- **[Box86 (`ptitseb/box86`)](https://github.com/ptitseb/box86)** — Signature-driven `cdecl`-to-host calling convention marshaling (`newminhh_call_x32_sig`, `g_sym_table[]`), synthetic `INT3` (`0xCC 'N' 'M' <id>`) PLT/GOT bridge stubs, and W^X reverse-callback trampolines.
+- **[Box64 (`ptitseb/box64`)](https://github.com/ptitseb/box64)** — 64-bit Long Mode library wrapping patterns contrasted against `x32`'s unified `< 4 GiB` ILP32 address space.
+- **[FEX-Emu (`FEX-Emu/FEX`)](https://github.com/FEX-Emu/FEX)** — `i386`-on-`x86_64` register allocation (`%r12d` = guest `ESP`, `%r14d` = guest `GS` base, `%r15` = `newminhh_cpu_t *`) and high-linked runner address layout (`0x70000000`).
+- **[Android Binary Translation / Berberis (`platform/frameworks/libs/binary_translation`)](https://android.googlesource.com/platform/frameworks/libs/binary_translation/)** — Two-tier TLS/ThreadState anchoring (`__thread` host `FS` TLS vs. guest `GS` via `ARCH_SET_GS`), ABI trampolines, direct block chaining, and 64K indirect-branch cache.
+- **[Alex Alejandre — *Janet on x32: 32-bit Pointers, 64-bit Speed, 25% Less RAM*](https://alexalejandre.com/programming/lisp/janet-for-the-x32-abi)** — Original inspiration for `x32` RAM savings with 64-bit speed.
+- **[Phoronix — *Linux x32 ABI in 2026*](https://www.phoronix.com/news/Linux-x32-ABI-2026)** & **[LWN — *Reconsidering x32 — again*](https://lwn.net/Articles/1074897/)** — Mainline Linux `CONFIG_X86_X32_ABI` status and kernel requirements.
+
+---
+
+## Authors & Contributors
+
+- **[shadichy](https://github.com/shadichy)** (`shadichy@blisslabs.org`) — Author & Project Lead
+- **Antigravity (Google DeepMind)** — Contributor (multi-agent architecture, implementation, static/dynamic translation pipelines, verification suites, and documentation)
