@@ -13,7 +13,7 @@ find_pattern_rule() {
         return 0
     fi
 
-    # 2. Candidate pattern file paths
+    # 2. Candidate pattern file paths (file must exist)
     for p in \
         /usr/lib/binfmt.d/newminhh.conf \
         /usr/share/newminhh/newminhh-binfmt.pattern \
@@ -27,8 +27,8 @@ find_pattern_rule() {
         fi
     done
 
-    # 3. Canonical fallback string
-    printf '%s' ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF'
+    echo "[newminhh-binfmt] ERROR: pattern file not found in any standard location" >&2
+    return 1
 }
 
 mount_binfmt() {

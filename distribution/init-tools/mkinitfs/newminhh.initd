@@ -19,7 +19,9 @@ start() {
                 return 0
             fi
         done
-        echo ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF' > /proc/sys/fs/binfmt_misc/register
+        eerror "binfmt pattern file not found in initramfs"
+        eend 1
+        return 1
     fi
     eend $?
 }

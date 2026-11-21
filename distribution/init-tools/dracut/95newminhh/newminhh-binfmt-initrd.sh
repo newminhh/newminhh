@@ -18,6 +18,6 @@ if [ -w "${REG_FILE}" ]; then
             exit 0
         fi
     done
-    # Fallback if pattern file was not copied
-    echo ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF' > "${REG_FILE}"
+    echo "[dracut:newminhh] ERROR: binfmt pattern file not found in initrd" >&2
+    exit 1
 fi
