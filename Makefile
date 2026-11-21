@@ -1,5 +1,10 @@
 # Top-level reproducible build, packaging, VM, test & benchmark orchestration for newminhh
 
+ifeq ($(origin CC),default)
+  CC := clang
+endif
+CSTD ?= gnu23
+
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib/x86_64-linux-gnux32
 BINDIR ?= $(PREFIX)/bin
@@ -9,11 +14,11 @@ VM_EXEC := ./vm/vm-exec.sh
 REMOTE_ROOT ?= /root/newminhh
 
 DETECT_DPKG_ARCH := $(shell dpkg --print-architecture 2>/dev/null)
-DETECT_GCC_X32 := $(shell gcc -dM -E - </dev/null 2>/dev/null | grep -q '__ILP32__' && echo x32 || true)
+DETECT_CC_X32 := $(shell $(CC) -dM -E - </dev/null 2>/dev/null | grep -q '__ILP32__' && echo x32 || true)
 
 ifeq ($(DETECT_DPKG_ARCH),x32)
 IN_X32 := 1
-else ifeq ($(DETECT_GCC_X32),x32)
+else ifeq ($(DETECT_CC_X32),x32)
 IN_X32 := 1
 else
 IN_X32 := 0
@@ -23,15 +28,16 @@ endif
 
 .PHONY: all clean build install sync-vm \
 	vm-up vm-verify vm-down \
-	test-part1 test-part2 test-part3 test-part4 test-part5 test bench help
+	test-part1 test-part2 test-part3 test-part4 test-part5 test bench help analyze
 
 all: build
 
 help:
-	@echo "newminhh Makefile targets (detected IN_X32=$(IN_X32)):"
+	@echo "newminhh Makefile targets (detected IN_X32=$(IN_X32), CC=$(CC), CSTD=$(CSTD)):"
 	@echo "  build       Build i386 corpus (host) and native x32 runtime/compat/corpus (VM or local x32)"
 	@echo "  install     Install libnewminhh_compat.so, libnewminhh_dbt.so, newminhh-run, bin/newminhh"
 	@echo "  clean       Remove local (and remote VM, if reachable) build artifacts"
+	@echo "  analyze     Run static analysis across compat and DBT engines (clang --analyze or gcc -fanalyzer)"
 	@echo "  vm-up       Boot Debian x32 VM (newminhh-x32)"
 	@echo "  vm-verify   Verify x32-only VM configuration (zero :i386 packages)"
 	@echo "  vm-down     Shut down Debian x32 VM"
@@ -53,17 +59,21 @@ clean:
 	$(MAKE) -C tests/part4 clean
 
 build:
-	$(MAKE) -C src/compat all
-	$(MAKE) -C src/dbt all
-	$(MAKE) -C tests/corpus x32
+	$(MAKE) -C src/compat CC="$(CC)" CSTD="$(CSTD)" all
+	$(MAKE) -C src/dbt CC="$(CC)" CSTD="$(CSTD)" all
+	$(MAKE) -C tests/corpus CC="$(CC)" CSTD="$(CSTD)" x32
 
 install: build
-	$(MAKE) -C src/compat PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" DESTDIR="$(DESTDIR)" install
-	$(MAKE) -C src/dbt PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" BINDIR="$(BINDIR)" DESTDIR="$(DESTDIR)" install
+	$(MAKE) -C src/compat CC="$(CC)" CSTD="$(CSTD)" PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" DESTDIR="$(DESTDIR)" install
+	$(MAKE) -C src/dbt CC="$(CC)" CSTD="$(CSTD)" PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" BINDIR="$(BINDIR)" DESTDIR="$(DESTDIR)" install
 	install -d "$(DESTDIR)$(BINDIR)"
 	chmod +x "$(CURDIR)/bin/newminhh"
 	ln -sf "$(abspath $(CURDIR)/bin/newminhh)" "$(DESTDIR)$(BINDIR)/newminhh"
 	@if [ -z "$(DESTDIR)" ]; then ldconfig; fi
+
+analyze:
+	$(MAKE) -C src/compat CC="$(CC)" CSTD="$(CSTD)" analyze
+	$(MAKE) -C src/dbt CC="$(CC)" CSTD="$(CSTD)" analyze
 
 vm-up vm-verify vm-down:
 	@echo "[newminhh] ERROR: '$@' must be invoked on the x86_64 host, not inside x32 guest." >&2
@@ -73,8 +83,8 @@ test-part1:
 	bash tests/corpus/run_part1_tests.sh --guest-run
 
 test-part2:
-	$(MAKE) -C src/compat clean all install
-	$(MAKE) -C tests/part2 clean all
+	$(MAKE) -C src/compat CC="$(CC)" CSTD="$(CSTD)" clean all install
+	$(MAKE) -C tests/part2 CC="$(CC)" CSTD="$(CSTD)" clean all
 	./tests/part2/test_compat
 
 test-part3:
@@ -116,12 +126,16 @@ clean:
 	fi
 
 build:
-	$(MAKE) -C tests/corpus i386
+	$(MAKE) -C tests/corpus CC="$(CC)" CSTD="$(CSTD)" i386
 	$(MAKE) sync-vm
-	$(VM_EXEC) -- make -C "$(REMOTE_ROOT)" PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" BINDIR="$(BINDIR)" build
+	$(VM_EXEC) -- make -C "$(REMOTE_ROOT)" CC="$(CC)" CSTD="$(CSTD)" PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" BINDIR="$(BINDIR)" build
 
 install: build
-	$(VM_EXEC) -- make -C "$(REMOTE_ROOT)" PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" BINDIR="$(BINDIR)" DESTDIR="$(DESTDIR)" install
+	$(VM_EXEC) -- make -C "$(REMOTE_ROOT)" CC="$(CC)" CSTD="$(CSTD)" PREFIX="$(PREFIX)" LIBDIR="$(LIBDIR)" BINDIR="$(BINDIR)" DESTDIR="$(DESTDIR)" install
+
+analyze:
+	$(MAKE) -C src/compat CC="$(CC)" CSTD="$(CSTD)" analyze
+	$(MAKE) -C src/dbt CC="$(CC)" CSTD="$(CSTD)" analyze
 
 vm-up:
 	bash vm/vm-up.sh
