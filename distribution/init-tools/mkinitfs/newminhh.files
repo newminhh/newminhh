@@ -4,5 +4,7 @@
 /usr/lib/libnewminhh_dbt.so
 /usr/libx32/libnewminhh_compat.so
 /usr/libx32/libnewminhh_dbt.so
+/usr/share/newminhh/newminhh-binfmt.pattern
+/usr/lib/binfmt.d/newminhh.conf
 /lib/ld-musl-x32.so.1
 /lib/ld-linux-x32.so.2

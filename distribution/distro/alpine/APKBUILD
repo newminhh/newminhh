@@ -20,6 +20,10 @@ package() {
     cd "$startdir/../../.."
     make install PREFIX=/usr LIBDIR=/usr/lib BINDIR=/usr/bin DESTDIR="$pkgdir"
 
+    # Install canonical shared pattern definition
+    install -Dm644 distribution/common/newminhh-binfmt.pattern \
+        "$pkgdir"/usr/share/newminhh/newminhh-binfmt.pattern
+
     # Install helper script
     install -Dm755 distribution/service/binfmt-helper.sh \
         "$pkgdir"/usr/libexec/newminhh/binfmt-helper.sh

@@ -10,8 +10,9 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	dh_auto_install -- install PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) BINDIR=/usr/bin
-	# Install binfmt configuration for systemd
-	install -D -m 0644 distribution/service/systemd/newminhh.conf debian/newminhh/usr/lib/binfmt.d/newminhh.conf
+	# Install shared binfmt pattern and systemd config
+	install -D -m 0644 distribution/common/newminhh-binfmt.pattern debian/newminhh/usr/share/newminhh/newminhh-binfmt.pattern
+	install -D -m 0644 distribution/common/newminhh-binfmt.pattern debian/newminhh/usr/lib/binfmt.d/newminhh.conf
 	# Install initramfs-tools hook and init-bottom script
 	install -D -m 0755 distribution/init-tools/initramfs-tools/hook_newminhh debian/newminhh/usr/share/initramfs-tools/hooks/newminhh
 	install -D -m 0755 distribution/init-tools/initramfs-tools/script_newminhh debian/newminhh/usr/share/initramfs-tools/scripts/init-bottom/newminhh

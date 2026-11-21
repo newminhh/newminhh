@@ -5,7 +5,31 @@ set -eu
 BINFMT_MNT="/proc/sys/fs/binfmt_misc"
 REG_FILE="${BINFMT_MNT}/register"
 ENTRY_FILE="${BINFMT_MNT}/newminhh-i386"
-RULE=':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF'
+
+find_pattern_rule() {
+    # 1. Environment variable override
+    if [ -n "${NEWMINHH_BINFMT_RULE:-}" ]; then
+        printf '%s' "${NEWMINHH_BINFMT_RULE}"
+        return 0
+    fi
+
+    # 2. Candidate pattern file paths
+    for p in \
+        /usr/lib/binfmt.d/newminhh.conf \
+        /usr/share/newminhh/newminhh-binfmt.pattern \
+        /etc/binfmt.d/newminhh.conf \
+        "$(dirname "$0")/../common/newminhh-binfmt.pattern" \
+        "$(dirname "$0")/newminhh.conf" \
+        "$(dirname "$0")/systemd/newminhh.conf"; do
+        if [ -f "$p" ]; then
+            head -n 1 "$p" | tr -d '\r\n'
+            return 0
+        fi
+    done
+
+    # 3. Canonical fallback string
+    printf '%s' ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF'
+}
 
 mount_binfmt() {
     if [ ! -d "${BINFMT_MNT}" ]; then
@@ -25,7 +49,8 @@ start() {
     if [ -f "${ENTRY_FILE}" ]; then
         echo -1 > "${ENTRY_FILE}" 2>/dev/null || true
     fi
-    printf '%s\n' "${RULE}" > "${REG_FILE}"
+    rule="$(find_pattern_rule)"
+    printf '%s\n' "${rule}" > "${REG_FILE}"
     echo "[newminhh-binfmt] Successfully registered newminhh-i386 binfmt handler"
 }
 

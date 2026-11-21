@@ -2,7 +2,6 @@
 # dracut check module for newminhh
 
 check() {
-    # Include by default if newminhh-run is installed on the host, or if explicitly requested
     require_binaries /usr/bin/newminhh-run || return 1
     return 255
 }
@@ -20,7 +19,11 @@ install() {
                   /usr/libx32/libnewminhh_compat.so \
                   /usr/libx32/libnewminhh_dbt.so 2>/dev/null || true
 
-    # Install ld-linux-x32.so dynamic linker and runtime libraries
+    # Install pattern definition file
+    inst_multiple /usr/lib/binfmt.d/newminhh.conf \
+                  /usr/share/newminhh/newminhh-binfmt.pattern 2>/dev/null || true
+
+    # Install dynamic linker and runtime libraries
     inst_libdir_file "ld-linux-x32.so.2"
     inst_libdir_file "libc.so.6"
     inst_libdir_file "libdl.so.2"

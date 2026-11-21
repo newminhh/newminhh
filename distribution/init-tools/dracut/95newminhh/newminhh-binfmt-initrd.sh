@@ -12,6 +12,12 @@ if [ -w "${REG_FILE}" ]; then
     if [ -f "${BINFMT_MNT}/newminhh-i386" ]; then
         echo -1 > "${BINFMT_MNT}/newminhh-i386" 2>/dev/null || true
     fi
-    # Use F flag so the kernel holds open file descriptor into memory across switch_root
+    for p in /usr/lib/binfmt.d/newminhh.conf /usr/share/newminhh/newminhh-binfmt.pattern /etc/binfmt.d/newminhh.conf; do
+        if [ -f "$p" ]; then
+            cat "$p" > "${REG_FILE}"
+            exit 0
+        fi
+    done
+    # Fallback if pattern file was not copied
     echo ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF' > "${REG_FILE}"
 fi

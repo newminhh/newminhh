@@ -26,8 +26,12 @@ package() {
     cd "${srcdir}/../../.."
     make install PREFIX=/usr LIBDIR=/usr/libx32 BINDIR=/usr/bin DESTDIR="${pkgdir}"
 
-    # Install systemd binfmt config
-    install -Dm644 distribution/service/systemd/newminhh.conf \
+    # Install canonical shared pattern definition
+    install -Dm644 distribution/common/newminhh-binfmt.pattern \
+        "${pkgdir}/usr/share/newminhh/newminhh-binfmt.pattern"
+
+    # Install systemd binfmt config (as symlink to canonical pattern or file)
+    install -Dm644 distribution/common/newminhh-binfmt.pattern \
         "${pkgdir}/usr/lib/binfmt.d/newminhh.conf"
 
     # Install systemd service unit as alternative/fallback

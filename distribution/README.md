@@ -6,10 +6,12 @@ This directory contains service scripts, initramfs/initrd hooks, and distributio
 
 ```
 distribution/
+├── common/
+│   └── newminhh-binfmt.pattern   # Canonical single-source binfmt_misc pattern rule
 ├── service/
 │   ├── binfmt-helper.sh          # Universal shell helper to mount and register/unregister binfmt_misc
 │   ├── systemd/
-│   │   ├── newminhh.conf         # /usr/lib/binfmt.d/ rule for systemd-binfmt.service
+│   │   ├── newminhh.conf         # /usr/lib/binfmt.d/ configuration (symlink to common pattern)
 │   │   └── newminhh-binfmt.service# Standalone systemd oneshot fallback unit
 │   ├── openrc/
 │   │   └── newminhh-binfmt       # OpenRC init.d service script
@@ -24,14 +26,14 @@ distribution/
 ├── init-tools/
 │   ├── dracut/
 │   │   └── 95newminhh/
-│   │       ├── module-setup.sh   # Dracut module: installs runner, x32 libs, and hook
+│   │       ├── module-setup.sh   # Dracut module: installs runner, x32 libs, pattern & hook
 │   │       └── newminhh-binfmt-initrd.sh # Pre-pivot hook (registers binfmt with 'F' flag)
 │   ├── mkinitcpio/
 │   │   ├── install_newminhh      # Arch mkinitcpio build hook
 │   │   └── hook_newminhh         # Arch mkinitcpio runtime hook
 │   ├── mkinitfs/
 │   │   ├── newminhh.initd        # Alpine mkinitfs early init hook
-│   │   └── newminhh.files        # Alpine mkinitfs binary and library manifest
+│   │   └── newminhh.files        # Alpine mkinitfs binary, library and pattern manifest
 │   └── initramfs-tools/
 │       ├── hook_newminhh         # Debian initramfs-tools copy hook
 │       └── script_newminhh       # Debian initramfs-tools init-bottom hook
@@ -41,13 +43,15 @@ distribution/
     └── alpine/                   # Alpine Linux APKBUILD & trigger
 ```
 
-## 2. Kernel `binfmt_misc` Registration Specification
+## 2. Kernel `binfmt_misc` Pattern Source of Truth
 
-All service managers and initramfs hooks register the following rule:
+The canonical rule is defined in `distribution/common/newminhh-binfmt.pattern`:
 
 ```
 :newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF
 ```
+
+All service scripts and initramfs generators reference this single file directly (or read it via `/usr/lib/binfmt.d/newminhh.conf` / `/usr/share/newminhh/newminhh-binfmt.pattern` when installed), eliminating hardcoded string duplicates across init managers.
 
 ### Match Fields:
 - **Magic**: `\x7fELF\x01\x01\x01...` matches ELF 32-bit (`\x01`), Little Endian (`\x01`), Version 1 (`\x01`), Executable/Shared (`\x02\x00`), `e_machine = EM_386` (`\x03\x00`).
@@ -62,6 +66,6 @@ All service managers and initramfs hooks register the following rule:
 ## 3. Initrd / Early Boot Integration
 
 When `newminhh` is bundled into the initramfs via Dracut, mkinitcpio, mkinitfs, or initramfs-tools:
-1. The x32 dynamic linker (`ld-linux-x32.so.2` or `ld-musl-x32.so.1`), core runtime libraries, and `newminhh-run` are copied into the initrd image.
+1. The x32 dynamic linker (`ld-linux-x32.so.2` or `ld-musl-x32.so.1`), core runtime libraries, pattern file, and `newminhh-run` are copied into the initrd image.
 2. The runtime hook runs before `switch_root` / handoff to the real rootfs.
 3. Because the registration uses the `F` (Fix Binary) flag, non-x32 native i386 binaries can execute during early rootfs discovery, storage driver initialization, and all subsequent stages.

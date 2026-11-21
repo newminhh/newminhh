@@ -29,4 +29,11 @@ for lib in /usr/lib/x86_64-linux-gnux32/libnewminhh_*.so /usr/libx32/libnewminhh
     fi
 done
 
+# Copy pattern file
+for p in /usr/lib/binfmt.d/newminhh.conf /usr/share/newminhh/newminhh-binfmt.pattern; do
+    if [ -f "$p" ]; then
+        copy_file config "$p" "$p"
+    fi
+done
+
 exit 0

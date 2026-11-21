@@ -22,6 +22,13 @@ build() {
         fi
     done
 
+    # Add pattern definition file
+    for p in /usr/lib/binfmt.d/newminhh.conf /usr/share/newminhh/newminhh-binfmt.pattern; do
+        if [[ -f "${p}" ]]; then
+            add_file "${p}"
+        fi
+    done
+
     # Add hook script to run before root handoff
     add_runscript
 }

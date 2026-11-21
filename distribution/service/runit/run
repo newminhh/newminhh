@@ -2,16 +2,22 @@
 # runit one-time task service for newminhh binfmt_misc
 exec 2>&1
 echo "[runit] Initializing newminhh binfmt_misc handler..."
-/usr/libexec/newminhh/binfmt-helper.sh start || /usr/share/newminhh/binfmt-helper.sh start || {
-    # Inline fallback
+if [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
+    /usr/libexec/newminhh/binfmt-helper.sh start
+elif [ -x /usr/share/newminhh/binfmt-helper.sh ]; then
+    /usr/share/newminhh/binfmt-helper.sh start
+else
     [ -d /proc/sys/fs/binfmt_misc ] || mkdir -p /proc/sys/fs/binfmt_misc
     grep -qs "binfmt_misc /proc/sys/fs/binfmt_misc" /proc/mounts || mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null || true
     if [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then
         echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386 2>/dev/null || true
     fi
-    if [ -w /proc/sys/fs/binfmt_misc/register ]; then
-        echo ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF' > /proc/sys/fs/binfmt_misc/register
-    fi
-}
+    for p in /usr/lib/binfmt.d/newminhh.conf /etc/binfmt.d/newminhh.conf /usr/share/newminhh/newminhh-binfmt.pattern; do
+        if [ -f "$p" ]; then
+            cat "$p" > /proc/sys/fs/binfmt_misc/register
+            break
+        fi
+    done
+fi
 # Pause indefinitely so runit does not restart this oneshot task repeatedly
 exec chpst -b newminhh-binfmt pause
