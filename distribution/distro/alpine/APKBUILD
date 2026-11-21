@@ -1,0 +1,54 @@
+# Maintainer: newminhh maintainers <maintainers@newminhh.org>
+pkgname=newminhh
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Container-less i386 Compatibility System for x32-Only Linux"
+url="https://github.com/newminhh/newminhh"
+arch="x86_64"
+license="Apache-2.0"
+depends="musl"
+makedepends="clang make libelf-dev"
+subpackages="$pkgname-openrc $pkgname-initramfs:initramfs"
+source=""
+
+build() {
+    cd "$startdir/../../.."
+    make build PREFIX=/usr LIBDIR=/usr/lib BINDIR=/usr/bin
+}
+
+package() {
+    cd "$startdir/../../.."
+    make install PREFIX=/usr LIBDIR=/usr/lib BINDIR=/usr/bin DESTDIR="$pkgdir"
+
+    # Install helper script
+    install -Dm755 distribution/service/binfmt-helper.sh \
+        "$pkgdir"/usr/libexec/newminhh/binfmt-helper.sh
+
+    # Install OpenRC service
+    install -Dm755 distribution/service/openrc/newminhh-binfmt \
+        "$pkgdir"/etc/init.d/newminhh-binfmt
+
+    # Install s6 service definitions
+    install -Dm644 distribution/service/s6/type \
+        "$pkgdir"/etc/s6/sv/newminhh-binfmt/type
+    install -Dm755 distribution/service/s6/up \
+        "$pkgdir"/etc/s6/sv/newminhh-binfmt/up
+}
+
+openrc() {
+    pkgdesc="$pkgdesc (OpenRC init scripts)"
+    install_if="$pkgname=$pkgver-r$pkgrel openrc"
+
+    mkdir -p "$subpkgdir"/etc/init.d
+    mv "$pkgdir"/etc/init.d/newminhh-binfmt "$subpkgdir"/etc/init.d/
+}
+
+initramfs() {
+    pkgdesc="$pkgdesc (mkinitfs support for early initramfs boot)"
+    install_if="$pkgname=$pkgver-r$pkgrel mkinitfs"
+
+    install -Dm755 "$startdir/../../../distribution/init-tools/mkinitfs/newminhh.initd" \
+        "$subpkgdir"/usr/share/mkinitfs/initramfs-init.d/newminhh
+    install -Dm644 "$startdir/../../../distribution/init-tools/mkinitfs/newminhh.files" \
+        "$subpkgdir"/etc/mkinitfs/features.d/newminhh.files
+}

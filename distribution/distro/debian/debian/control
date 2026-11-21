@@ -1,0 +1,18 @@
+Source: newminhh
+Section: utils
+Priority: optional
+Maintainer: newminhh maintainers <maintainers@newminhh.org>
+Build-Depends: debhelper-compat (= 13), clang, libelf-dev, make
+Standards-Version: 4.6.2
+Homepage: https://github.com/newminhh/newminhh
+Rules-Requires-Root: no
+
+Package: newminhh
+Architecture: x32 amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Suggests: binfmt-support, systemd
+Description: Container-less i386 Compatibility System for x32-Only Linux
+ newminhh executes 32-bit x86 (i386) binaries inside an x32 address space
+ using hybrid static ELF rewriting, direct cdecl-to-x32 trampolines, and
+ in-process DBT. This package also provides binfmt_misc integration and
+ initramfs hooks.

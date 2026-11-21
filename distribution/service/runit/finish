@@ -1,0 +1,5 @@
+#!/bin/sh
+# runit finish script to unregister newminhh binfmt on service stop
+if [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then
+    echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386 2>/dev/null || true
+fi

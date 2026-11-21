@@ -1,0 +1,44 @@
+#!/sbin/openrc-run
+description="Register newminhh i386 binfmt_misc handler"
+
+depend() {
+    need localmount
+    after bootmisc
+    before sysinit
+}
+
+BINFMT_MNT="/proc/sys/fs/binfmt_misc"
+REG_FILE="${BINFMT_MNT}/register"
+ENTRY_FILE="${BINFMT_MNT}/newminhh-i386"
+RULE=':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF'
+
+start() {
+    ebegin "Registering newminhh-i386 in binfmt_misc"
+    if [ ! -d "${BINFMT_MNT}" ]; then
+        mkdir -p "${BINFMT_MNT}" 2>/dev/null || true
+    fi
+    if ! grep -qs "binfmt_misc ${BINFMT_MNT}" /proc/mounts; then
+        mount -t binfmt_misc binfmt_misc "${BINFMT_MNT}" 2>/dev/null || true
+    fi
+
+    if [ ! -w "${REG_FILE}" ]; then
+        eerror "${REG_FILE} is not writable or binfmt_misc not supported by kernel"
+        eend 1
+        return 1
+    fi
+
+    if [ -f "${ENTRY_FILE}" ]; then
+        echo -1 > "${ENTRY_FILE}" 2>/dev/null || true
+    fi
+
+    printf '%s\n' "${RULE}" > "${REG_FILE}"
+    eend $?
+}
+
+stop() {
+    ebegin "Unregistering newminhh-i386 from binfmt_misc"
+    if [ -f "${ENTRY_FILE}" ]; then
+        echo -1 > "${ENTRY_FILE}" 2>/dev/null || true
+    fi
+    eend $?
+}

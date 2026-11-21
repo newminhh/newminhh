@@ -1,0 +1,23 @@
+#!/bin/execlineb -P
+fdmove -c 2 1
+ifelse { test -x /usr/libexec/newminhh/binfmt-helper.sh }
+{
+    /usr/libexec/newminhh/binfmt-helper.sh start
+}
+ifelse { test -x /usr/share/newminhh/binfmt-helper.sh }
+{
+    /usr/share/newminhh/binfmt-helper.sh start
+}
+foreground {
+    if { test ! -d /proc/sys/fs/binfmt_misc } mkdir -p /proc/sys/fs/binfmt_misc
+}
+foreground {
+    mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
+}
+foreground {
+    if { test -f /proc/sys/fs/binfmt_misc/newminhh-i386 }
+    redirfd -w 1 /proc/sys/fs/binfmt_misc/newminhh-i386
+    echo -1
+}
+redirfd -w 1 /proc/sys/fs/binfmt_misc/register
+echo ":newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF"

@@ -1,0 +1,68 @@
+# Maintainer: newminhh maintainers <maintainers@newminhh.org>
+pkgname=newminhh
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Container-less i386 Compatibility System for x32-Only Linux"
+arch=('x86_64' 'x32')
+url="https://github.com/newminhh/newminhh"
+license=('Apache-2.0')
+depends=('glibc')
+makedepends=('clang' 'make' 'libelf')
+optdepends=(
+    'systemd: for systemd-binfmt service'
+    'mkinitcpio: for early initramfs binfmt integration'
+    'dracut: for dracut initramfs binfmt integration'
+)
+install=newminhh.install
+source=()
+sha256sums=()
+
+build() {
+    cd "${srcdir}/../../.."
+    make build PREFIX=/usr LIBDIR=/usr/libx32 BINDIR=/usr/bin
+}
+
+package() {
+    cd "${srcdir}/../../.."
+    make install PREFIX=/usr LIBDIR=/usr/libx32 BINDIR=/usr/bin DESTDIR="${pkgdir}"
+
+    # Install systemd binfmt config
+    install -Dm644 distribution/service/systemd/newminhh.conf \
+        "${pkgdir}/usr/lib/binfmt.d/newminhh.conf"
+
+    # Install systemd service unit as alternative/fallback
+    install -Dm644 distribution/service/systemd/newminhh-binfmt.service \
+        "${pkgdir}/usr/lib/systemd/system/newminhh-binfmt.service"
+
+    # Install binfmt helper script
+    install -Dm755 distribution/service/binfmt-helper.sh \
+        "${pkgdir}/usr/libexec/newminhh/binfmt-helper.sh"
+
+    # Install mkinitcpio hook and install files
+    install -Dm644 distribution/init-tools/mkinitcpio/install_newminhh \
+        "${pkgdir}/usr/lib/initcpio/install/newminhh"
+    install -Dm644 distribution/init-tools/mkinitcpio/hook_newminhh \
+        "${pkgdir}/usr/lib/initcpio/hooks/newminhh"
+
+    # Install dracut module
+    install -Dm755 distribution/init-tools/dracut/95newminhh/module-setup.sh \
+        "${pkgdir}/usr/lib/dracut/modules.d/95newminhh/module-setup.sh"
+    install -Dm755 distribution/init-tools/dracut/95newminhh/newminhh-binfmt-initrd.sh \
+        "${pkgdir}/usr/lib/dracut/modules.d/95newminhh/newminhh-binfmt-initrd.sh"
+
+    # Install runit service
+    install -Dm755 distribution/service/runit/run \
+        "${pkgdir}/etc/sv/newminhh-binfmt/run"
+    install -Dm755 distribution/service/runit/finish \
+        "${pkgdir}/etc/sv/newminhh-binfmt/finish"
+
+    # Install OpenRC service
+    install -Dm755 distribution/service/openrc/newminhh-binfmt \
+        "${pkgdir}/etc/init.d/newminhh-binfmt"
+
+    # Install s6 service
+    install -Dm644 distribution/service/s6/type \
+        "${pkgdir}/etc/s6/sv/newminhh-binfmt/type"
+    install -Dm755 distribution/service/s6/up \
+        "${pkgdir}/etc/s6/sv/newminhh-binfmt/up"
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=Register newminhh i386 binfmt_misc handler
+Documentation=https://github.com/newminhh/newminhh
+DefaultDependencies=no
+After=proc-sys-fs-binfmt_misc.mount
+Before=sysinit.target
+ConditionPathIsReadWrite=/proc/sys/fs/binfmt_misc/register
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'if [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386; fi; echo ":newminhh-i386:M::\\x7fELF\\x01\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x03\\x00:\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\x00\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xfe\\xff\\xff\\xff:/usr/bin/newminhh-run:POCF" > /proc/sys/fs/binfmt_misc/register'
+ExecStop=/bin/sh -c 'if [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386; fi'
+
+[Install]
+WantedBy=sysinit.target

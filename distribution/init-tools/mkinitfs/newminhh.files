@@ -1,0 +1,8 @@
+/usr/bin/newminhh-run
+/usr/bin/newminhh
+/usr/lib/libnewminhh_compat.so
+/usr/lib/libnewminhh_dbt.so
+/usr/libx32/libnewminhh_compat.so
+/usr/libx32/libnewminhh_dbt.so
+/lib/ld-musl-x32.so.1
+/lib/ld-linux-x32.so.2

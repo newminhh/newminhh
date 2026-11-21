@@ -1,0 +1,22 @@
+post_install() {
+    if command -v systemd-binfmt >/dev/null 2>&1; then
+        systemd-binfmt /usr/lib/binfmt.d/newminhh.conf 2>/dev/null || true
+    elif [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
+        /usr/libexec/newminhh/binfmt-helper.sh start 2>/dev/null || true
+    fi
+    echo "==> newminhh binfmt_misc handler installed."
+    echo "==> To enable early execution in initramfs with mkinitcpio,"
+    echo "==> add 'newminhh' to HOOKS=(...) in /etc/mkinitcpio.conf and re-run mkinitcpio -P."
+}
+
+post_upgrade() {
+    post_install
+}
+
+post_remove() {
+    if [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
+        /usr/libexec/newminhh/binfmt-helper.sh stop 2>/dev/null || true
+    elif [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then
+        echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386 2>/dev/null || true
+    fi
+}

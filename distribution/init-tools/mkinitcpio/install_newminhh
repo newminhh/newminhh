@@ -1,0 +1,35 @@
+#!/bin/bash
+# mkinitcpio install hook for newminhh
+
+build() {
+    # Add newminhh-run and helper binaries
+    add_binary /usr/bin/newminhh-run
+    if [[ -x /usr/bin/newminhh ]]; then
+        add_binary /usr/bin/newminhh
+    fi
+
+    # Add newminhh shared objects
+    for lib in /usr/lib/x86_64-linux-gnux32/libnewminhh_*.so /usr/libx32/libnewminhh_*.so /usr/lib/libnewminhh_*.so; do
+        if [[ -e "${lib}" ]]; then
+            add_file "${lib}"
+        fi
+    done
+
+    # Add dynamic linker and C runtime for x32
+    for ldx32 in /lib/ld-linux-x32.so.2 /libx32/ld-linux-x32.so.2 /usr/libx32/ld-linux-x32.so.2; do
+        if [[ -e "${ldx32}" ]]; then
+            add_file "${ldx32}"
+        fi
+    done
+
+    # Add hook script to run before root handoff
+    add_runscript
+}
+
+help() {
+    cat <<'HELPEOF'
+This hook includes the newminhh i386-to-x32 runtime environment into early initramfs
+and registers the newminhh-i386 binfmt_misc handler with the 'F' (fix-binary) flag
+so non-x32 native i386 binaries execute cleanly before and after root handoff.
+HELPEOF
+}

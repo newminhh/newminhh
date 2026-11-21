@@ -1,0 +1,55 @@
+#!/bin/sh
+# Busybox / SysV init script for newminhh binfmt_misc handler
+### BEGIN INIT INFO
+# Provides:          newminhh-binfmt
+# Required-Start:    $local_fs $mountall
+# Required-Stop:
+# Default-Start:     S 1 2 3 4 5
+# Default-Stop:      0 6
+# Short-Description: Register newminhh i386 binfmt_misc handler
+### END INIT INFO
+
+case "$1" in
+    start)
+        echo "Starting newminhh-binfmt..."
+        if [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
+            /usr/libexec/newminhh/binfmt-helper.sh start
+        elif [ -x /usr/share/newminhh/binfmt-helper.sh ]; then
+            /usr/share/newminhh/binfmt-helper.sh start
+        else
+            [ -d /proc/sys/fs/binfmt_misc ] || mkdir -p /proc/sys/fs/binfmt_misc
+            grep -qs "binfmt_misc /proc/sys/fs/binfmt_misc" /proc/mounts || mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null || true
+            if [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then
+                echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386 2>/dev/null || true
+            fi
+            if [ -w /proc/sys/fs/binfmt_misc/register ]; then
+                echo ':newminhh-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/newminhh-run:POCF' > /proc/sys/fs/binfmt_misc/register
+            fi
+        fi
+        ;;
+    stop)
+        echo "Stopping newminhh-binfmt..."
+        if [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
+            /usr/libexec/newminhh/binfmt-helper.sh stop
+        elif [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then
+            echo -1 > /proc/sys/fs/binfmt_misc/newminhh-i386 2>/dev/null || true
+        fi
+        ;;
+    restart|force-reload)
+        "$0" stop
+        "$0" start
+        ;;
+    status)
+        if [ -f /proc/sys/fs/binfmt_misc/newminhh-i386 ]; then
+            cat /proc/sys/fs/binfmt_misc/newminhh-i386
+        else
+            echo "newminhh-binfmt is not registered"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 1
+        ;;
+esac
+exit 0

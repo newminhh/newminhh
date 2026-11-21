@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    if [ -x /usr/sbin/update-initramfs ]; then
+        update-initramfs -u 2>/dev/null || true
+    fi
+    if [ -x /usr/lib/systemd/systemd-binfmt ]; then
+        /usr/lib/systemd/systemd-binfmt /usr/lib/binfmt.d/newminhh.conf 2>/dev/null || true
+    elif [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
+        /usr/libexec/newminhh/binfmt-helper.sh start 2>/dev/null || true
+    fi
+fi
+
+#DEBHELPER#
+exit 0
