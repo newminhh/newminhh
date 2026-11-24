@@ -10,6 +10,8 @@
 
 `newminhh` runs unmodified 32-bit x86 Linux executables and shared libraries (`.so`) directly on a pure x32 Linux userspace whose kernel runs with `ia32_emulation=0` and `syscall.x32=y`—requiring zero `:i386` packages, zero `libc6-i386`, and zero `/lib/ld-linux.so.2`, while keeping native x32 shared libraries (`libc.so.6`, `libm.so.6`, `libnewminhh_compat.so`) page-cache shared across processes.
 
+The system now includes the 11th repository, **[`newminhh/lookup`](https://github.com/newminhh/lookup)**, which provides a layered `lookup_table.txt` (curated `rules.d/` catalogs + generated base + per-machine dynamic cache) consumed by compat/dbt/patcher. It supports multi-distro glibc+musl x32 trigger integration for non-fatal cache regeneration. The patcher exposes a Multi-Level Patcher pipeline: **Level 1**, **Level 2A**, gated **Level 2B**, and gated **Level 3A** + **3C `--decompile-assist`** with `rz-ghidra`, Ghidra, IDA Pro, and Universal IDA Free backends.
+
 ---
 
 ## Split Repository Map (`https://github.com/newminhh`)
@@ -20,12 +22,13 @@ This umbrella repository (`newminhh/newminhh`) provides top-level build orchestr
 | :--- | :--- | :--- |
 | [`newminhh/newminhh`](https://github.com/newminhh/newminhh) | `/` | Umbrella orchestration (`Makefile`, `bin/newminhh`), VM tooling (`vm/`), verification & benchmarks (`tests/`) |
 | [`newminhh/common`](https://github.com/newminhh/common) | `src/common/` | Shared C/assembly ABI contract (`newminhh_cpu_t`, struct layouts, signature descriptors, integration hooks, logging) |
-| [`newminhh/compat`](https://github.com/newminhh/compat) | `src/compat/` | `libnewminhh_compat.so`: bidirectional cdecl<->x32 assembly bridges, W^X trampoline pools, syscall translation, struct repacking, `dlopen`/`dlsym`, and libc/libm/pthread wrappers |
-| [`newminhh/dbt`](https://github.com/newminhh/dbt) | `src/dbt/` | `libnewminhh_dbt.so` & `newminhh-run`: in-process Capstone x86-to-x86-64 JIT translator, ELF32 loader, 64K indirect-branch cache, edge chaining, and `SIGSEGV` NX-guard callbacks |
-| [`newminhh/patcher`](https://github.com/newminhh/patcher) | `src/patcher/` | `newminhh-patch` & `re_patcher`: containerized (`re-env:latest`) multi-tool static analyzer (`elftools`, `capstone`, `angr`, `r2`, `ghidra`), 4-byte-stride Long Mode rewriter, x32 GAS trampoline builder, and hybrid DBT fallback |
+| [`newminhh/lookup`](https://github.com/newminhh/lookup) | `src/lookup/` | 11th repo: layered `lookup_table.txt` generator/parser (`newminhh-lookup-gen`, `libnmlookup.a`), curated `rules.d/` catalogs, and multi-distro glibc+musl x32 ABI trigger inputs consumed by compat/dbt/patcher |
+| [`newminhh/compat`](https://github.com/newminhh/compat) | `src/compat/` | `libnewminhh_compat.so`: bidirectional cdecl<->x32 assembly bridges, W^X trampoline pools, syscall translation, struct repacking, `dlopen`/`dlsym`, libc/libm/pthread wrappers, and lookup-registry-backed ABI resolution |
+| [`newminhh/dbt`](https://github.com/newminhh/dbt) | `src/dbt/` | `libnewminhh_dbt.so` & `newminhh-run`: in-process Capstone x86-to-x86-64 JIT translator, ELF32 loader, 64K indirect-branch cache, edge chaining, `SIGSEGV` NX-guard callbacks, and lookup-aware symbol resolution |
+| [`newminhh/patcher`](https://github.com/newminhh/patcher) | `src/patcher/` | `newminhh-patch` & `re_patcher`: containerized (`re-env:latest`) Multi-Level Patcher (Level 1 / Level 2A / gated Level 2B / gated Level 3A + 3C `--decompile-assist` with `rz-ghidra`, Ghidra, IDA Pro, and Universal IDA Free backends), lookup-driven ABI classification, and hybrid DBT fallback |
 | [`newminhh/tests`](https://github.com/newminhh/tests) | `tests/` | Parts 1–5 verification corpus (`C01`–`C11`, `S01`–`S03`, `N01`–`N09`), regression suites, and `/proc/<pid>/smaps` + timing benchmark harness |
 | [`newminhh/vm_test_scripts`](https://github.com/newminhh/vm_test_scripts) | `vm/` | Debian `x32` `libvirt-qemu` provisioning, execution, console, and `x32`-only verification scripts |
-| [`newminhh/docs`](https://github.com/newminhh/docs) | `docs/` | Comprehensive overview, deep architecture reference, and VM/testing/benchmarking documentation |
+| [`newminhh/docs`](https://github.com/newminhh/docs) | `docs/` | Comprehensive overview, deep architecture reference, VM/testing/benchmarking, lookup/patcher-level docs, and distro trigger documentation |
 | [`newminhh/agent-notice`](https://github.com/newminhh/agent-notice) | *(archived)* | Archived `PROJECT.md` and `.agents/` planning, review, and Victory Audit artifacts |
 
 ---
@@ -90,16 +93,19 @@ This cross-compiles the i386 corpus (`tests/corpus`), syncs sources to `newminhh
 ├── docs/                   # Documentation (https://github.com/newminhh/docs)
 ├── src/
 │   ├── common/             # Shared ABI headers (https://github.com/newminhh/common)
+│   ├── lookup/             # Layered lookup_table.txt generator/parser, rules.d catalogs (https://github.com/newminhh/lookup)
 │   ├── compat/             # Compatibility runtime library (https://github.com/newminhh/compat)
 │   ├── dbt/                # In-process DBT engine & loader (https://github.com/newminhh/dbt)
 │   └── patcher/            # Static/hybrid ELF patcher (https://github.com/newminhh/patcher)
 ├── vm/                     # Rootless Debian x32 libvirt-qemu VM scripts & domain template
 └── tests/
     ├── corpus/             # 13 CLI + 3 .so + 9 negative (N01-N09) + benchmark fixtures (Part 1)
+    ├── lookup/             # Lookup parser/generator and registry parity tests
     ├── part2/              # libnewminhh_compat.so C + ASM ABI tests
     ├── part3/              # Static/hybrid patcher & fallback tests
     ├── part4/              # Runtime DBT & multi-threaded stress tests
-    └── part5/              # Reproducibility, CLI & /proc/<pid>/smaps benchmark runner
+    ├── part5/              # Reproducibility, CLI & /proc/<pid>/smaps benchmark runner
+    └── part7/              # Level 3 patcher gates, diff-verify, and decompile-assist tests
 ```
 
 ---
@@ -108,6 +114,9 @@ This cross-compiles the i386 corpus (`tests/corpus`), syncs sources to `newminhh
 
 - [`docs/README.md`](https://github.com/newminhh/docs/blob/main/README.md) — Overview, installation, and CLI reference
 - [`docs/ARCHITECTURE.md`](https://github.com/newminhh/docs/blob/main/ARCHITECTURE.md) — ABI tables, register usage, memory layout, trampolines, syscalls, struct repacking, JIT emitter, and static ELF rewriting
+- [`docs/lookup_table.md`](https://github.com/newminhh/docs/blob/main/lookup_table.md) — Layered lookup schema, signature DSL, merge precedence, and rule-authoring workflow
+- [`docs/patcher_levels.md`](https://github.com/newminhh/docs/blob/main/patcher_levels.md) — Multi-Level Patcher (Level 1/2A/2B/3A/3C) reference and CLI flags
+- [`docs/distro_triggers.md`](https://github.com/newminhh/docs/blob/main/distro_triggers.md) — Multi-distro glibc+musl x32 discovery, triggers, and lookup regeneration policy
 - [`docs/TESTING_AND_VM.md`](https://github.com/newminhh/docs/blob/main/TESTING_AND_VM.md) — VM provisioning scripts and Parts 1–5 verification & `/proc/<pid>/smaps` benchmarking suites
 
 ---

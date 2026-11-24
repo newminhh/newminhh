@@ -19,3 +19,6 @@
 [submodule "vm"]
 	path = vm
 	url = https://github.com/newminhh/vm_test_scripts.git
+[submodule "src/lookup"]
+	path = src/lookup
+	url = https://github.com/newminhh/lookup.git

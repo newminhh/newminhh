@@ -2,7 +2,7 @@ Source: newminhh
 Section: utils
 Priority: optional
 Maintainer: newminhh maintainers <maintainers@newminhh.org>
-Build-Depends: debhelper-compat (= 13), clang, libelf-dev, make
+Build-Depends: debhelper-compat (= 13), clang, libcapstone-dev, make
 Standards-Version: 4.6.2
 Homepage: https://github.com/newminhh/newminhh
 Rules-Requires-Root: no

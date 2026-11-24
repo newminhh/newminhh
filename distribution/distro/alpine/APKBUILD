@@ -6,9 +6,11 @@ pkgdesc="Container-less i386 Compatibility System for x32-Only Linux"
 url="https://github.com/newminhh/newminhh"
 arch="x86_64"
 license="Apache-2.0"
-depends="musl"
-makedepends="clang make libelf-dev"
+depends="musl capstone"
+makedepends="clang make capstone-dev"
 subpackages="$pkgname-openrc $pkgname-initramfs:initramfs"
+install="$pkgname.post-install $pkgname.post-upgrade $pkgname.pre-deinstall"
+triggers="$pkgname.trigger=/usr/lib:/lib:/usr/local/lib"
 source=""
 
 build() {

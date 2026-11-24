@@ -6,8 +6,8 @@ pkgdesc="Container-less i386 Compatibility System for x32-Only Linux"
 arch=('x86_64' 'x32')
 url="https://github.com/newminhh/newminhh"
 license=('Apache-2.0')
-depends=('glibc')
-makedepends=('clang' 'make' 'libelf')
+depends=('glibc' 'capstone')
+makedepends=('clang' 'make')
 optdepends=(
     'systemd: for systemd-binfmt service'
     'mkinitcpio: for early initramfs binfmt integration'
@@ -37,6 +37,16 @@ package() {
     # Install systemd service unit as alternative/fallback
     install -Dm644 distribution/service/systemd/newminhh-binfmt.service \
         "${pkgdir}/usr/lib/systemd/system/newminhh-binfmt.service"
+
+    # Install lookup regeneration systemd units
+    install -Dm644 src/lookup/newminhh-lookup.path \
+        "${pkgdir}/usr/lib/systemd/system/newminhh-lookup.path"
+    install -Dm644 src/lookup/newminhh-lookup.service \
+        "${pkgdir}/usr/lib/systemd/system/newminhh-lookup.service"
+
+    # Install ALPM hook for lookup regeneration
+    install -Dm644 distribution/distro/arch/90-newminhh-lookup.hook \
+        "${pkgdir}/usr/share/libalpm/hooks/90-newminhh-lookup.hook"
 
     # Install binfmt helper script
     install -Dm755 distribution/service/binfmt-helper.sh \

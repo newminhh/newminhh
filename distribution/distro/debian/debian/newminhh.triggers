@@ -1,0 +1,4 @@
+interest-noawait /usr/lib/x86_64-linux-gnux32
+interest-noawait /lib/x86_64-linux-gnux32
+interest-noawait /usr/libx32
+interest-noawait /libx32

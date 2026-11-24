@@ -1,0 +1,14 @@
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Target = usr/libx32/*
+Target = usr/lib/*.so*
+Target = usr/lib/x86_64-linux-gnux32/*
+
+[Action]
+Description = Regenerating newminhh lookup table...
+When = PostTransaction
+Exec = /usr/bin/sh -c '/usr/bin/newminhh-lookup-gen --system --quiet || echo "newminhh: lookup regen failed; using compiled-in base table" >&2'
+Depends = newminhh

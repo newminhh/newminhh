@@ -36,8 +36,16 @@ is_x32_env() {
     if [[ "${darch}" == "x32" ]]; then
         return 0
     fi
+    if [[ -e "/lib/ld-musl-x32.so.1" ]]; then
+        return 0
+    fi
     if command -v gcc >/dev/null 2>&1; then
         if gcc -dM -E - </dev/null 2>/dev/null | grep -q '__ILP32__'; then
+            return 0
+        fi
+    fi
+    if command -v clang >/dev/null 2>&1; then
+        if clang -dM -E - </dev/null 2>/dev/null | grep -q '__ILP32__'; then
             return 0
         fi
     fi
@@ -64,6 +72,8 @@ Subcommands:
       Run Part 5 /proc/<pid>/smaps, RSS/PSS sharing & execution timing benchmarks inside newminhh-x32.
   vm <up|down|verify|exec|console> [args...]
       Manage or execute commands inside the Debian x32 libvirt-qemu VM.
+  lookup {regen,check,show} [args...]
+      Manage layered i386-to-x32 ABI lookup tables (regen/check/show).
   -h, --help
       Show this help message.
 EOF
@@ -315,6 +325,306 @@ cmd_vm() {
     esac
 }
 
+lookup_usage() {
+    cat <<'EOF'
+Usage:
+  newminhh lookup regen [--sysroot DIR] [-o PATH] [--quiet]
+  newminhh lookup check [FILE]
+  newminhh lookup show <soname> [sym] [--table FILE]
+EOF
+}
+
+resolve_lookup_gen() {
+    if command -v newminhh-lookup-gen >/dev/null 2>&1; then
+        command -v newminhh-lookup-gen
+        return 0
+    fi
+    local local_gen="${ROOT_DIR}/src/lookup/newminhh-lookup-gen"
+    if [[ -x "${local_gen}" ]]; then
+        printf '%s' "${local_gen}"
+        return 0
+    fi
+    err "newminhh-lookup-gen not found; install it or provide ${local_gen}"
+    return 1
+}
+
+cmd_lookup_regen() {
+    local sysroot=""
+    local out_path=""
+    local quiet=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --sysroot)
+                if [[ $# -lt 2 ]]; then
+                    err "'lookup regen --sysroot' requires a directory argument"
+                    return 2
+                fi
+                sysroot="$2"
+                shift 2
+                ;;
+            -o)
+                if [[ $# -lt 2 ]]; then
+                    err "'lookup regen -o' requires a path argument"
+                    return 2
+                fi
+                out_path="$2"
+                shift 2
+                ;;
+            --quiet)
+                quiet=1
+                shift
+                ;;
+            -h|--help)
+                lookup_usage
+                return 0
+                ;;
+            *)
+                err "unknown option '$1' for 'lookup regen'"
+                return 2
+                ;;
+        esac
+    done
+
+    local -a gen_args=(--system)
+    if [[ -n "${sysroot}" ]]; then
+        gen_args+=(--sysroot "${sysroot}")
+    fi
+    if [[ -n "${out_path}" ]]; then
+        gen_args+=(-o "${out_path}")
+    fi
+    if [[ "${quiet}" -eq 1 ]]; then
+        gen_args+=(--quiet)
+    fi
+
+    local run_local=0
+    if is_x32_env || [[ -n "${sysroot}" ]] || [[ -n "${out_path}" ]]; then
+        run_local=1
+    fi
+
+    if [[ "${run_local}" -eq 1 ]]; then
+        local gen=""
+        if ! gen="$(resolve_lookup_gen)"; then
+            return 1
+        fi
+        exec "${gen}" "${gen_args[@]}"
+    fi
+
+    local vm_exec="${ROOT_DIR}/vm/vm-exec.sh"
+    if [[ ! -x "${vm_exec}" ]]; then
+        err "vm-exec.sh not found: ${vm_exec}"
+        return 1
+    fi
+
+    local cmd_str=""
+    local remote_gen=""
+    remote_gen="if command -v newminhh-lookup-gen >/dev/null 2>&1; then GEN=\$(command -v newminhh-lookup-gen); elif [[ -x ${REMOTE_ROOT}/src/lookup/newminhh-lookup-gen ]]; then GEN=${REMOTE_ROOT}/src/lookup/newminhh-lookup-gen; else echo '[newminhh] ERROR: newminhh-lookup-gen not found; install it or provide ${REMOTE_ROOT}/src/lookup/newminhh-lookup-gen' >&2; exit 1; fi"
+    local -a remote_cmd=(newminhh-lookup-gen)
+    remote_cmd=("${gen_args[@]}")
+    printf -v cmd_str '%q ' "${remote_cmd[@]}"
+    "${vm_exec}" -- bash -c "${remote_gen}; \"\$GEN\" ${cmd_str}"
+}
+
+cmd_lookup_check() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        lookup_usage
+        return 0
+    fi
+    if [[ $# -gt 1 ]]; then
+        err "'lookup check' accepts at most one [FILE] argument"
+        return 2
+    fi
+    if [[ "${1:-}" == -* ]]; then
+        err "unknown option '$1' for 'lookup check'"
+        return 2
+    fi
+    local file="${1:-/var/cache/newminhh/lookup_table.txt}"
+    local gen=""
+    if ! gen="$(resolve_lookup_gen)"; then
+        return 1
+    fi
+    exec "${gen}" --check "${file}"
+}
+
+lookup_select_table() {
+    local explicit_table="$1"
+    local selected=""
+    local warn_fallback=0
+
+    if [[ -n "${explicit_table}" ]]; then
+        if [[ ! -f "${explicit_table}" ]]; then
+            err "lookup table not found: ${explicit_table}"
+            return 1
+        fi
+        printf '%s' "${explicit_table}"
+        return 0
+    fi
+
+    if [[ -n "${NEWMINHH_LOOKUP_TABLE:-}" ]]; then
+        if [[ -f "${NEWMINHH_LOOKUP_TABLE}" ]]; then
+            printf '%s' "${NEWMINHH_LOOKUP_TABLE}"
+            return 0
+        fi
+        err "NEWMINHH_LOOKUP_TABLE is set but file not found: ${NEWMINHH_LOOKUP_TABLE}"
+        return 1
+    fi
+
+    if [[ -f "/var/cache/newminhh/lookup_table.txt" ]]; then
+        printf '%s' "/var/cache/newminhh/lookup_table.txt"
+        return 0
+    fi
+
+    local -a fallbacks=(
+        "/usr/share/newminhh/lookup_base.txt"
+        "${ROOT_DIR}/src/lookup/lookup_base.txt"
+    )
+    local fb=""
+    for fb in "${fallbacks[@]}"; do
+        if [[ -f "${fb}" ]]; then
+            echo "[newminhh] WARN: lookup cache missing, falling back to ${fb}" >&2
+            printf '%s' "${fb}"
+            return 0
+        fi
+    done
+
+    err "no lookup table found (checked /var/cache/newminhh/lookup_table.txt, /usr/share/newminhh/lookup_base.txt, ${ROOT_DIR}/src/lookup/lookup_base.txt)"
+    return 1
+}
+
+cmd_lookup_show() {
+    local table=""
+    local soname=""
+    local sym=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                lookup_usage
+                return 0
+                ;;
+            --table)
+                if [[ $# -lt 2 ]]; then
+                    err "'lookup show --table' requires a file argument"
+                    return 2
+                fi
+                table="$2"
+                shift 2
+                ;;
+            --table=*)
+                table="${1#*=}"
+                shift
+                ;;
+            --*)
+                err "unknown option '$1' for 'lookup show'"
+                return 2
+                ;;
+            *)
+                if [[ -z "${soname}" ]]; then
+                    soname="$1"
+                elif [[ -z "${sym}" ]]; then
+                    sym="$1"
+                else
+                    err "unexpected argument '$1' for 'lookup show'"
+                    return 2
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "${soname}" ]]; then
+        err "'lookup show' requires <soname> [sym]"
+        return 2
+    fi
+
+    local table_path=""
+    if ! table_path="$(lookup_select_table "${table}")"; then
+        return 1
+    fi
+
+    awk -v want_soname="${soname}" -v want_sym="${sym}" '
+        /^[[:space:]]*#/ { next }
+        /^[[:space:]]*$/ { next }
+        {
+            rec = $1
+            if (rec != "lib" && rec != "sym") next
+            son = $2
+            if (son != want_soname) next
+            if (rec == "lib") {
+                rows[++n] = $0
+                next
+            }
+            symname = $3
+            if (want_sym == "" || symname == want_sym || symname == "*") {
+                rows[++n] = $0
+            }
+        }
+        END {
+            if (n == 0) {
+                msg = "[newminhh] ERROR: no lookup records matched soname \047" want_soname "\047"
+                if (want_sym != "") msg = msg " symbol \047" want_sym "\047"
+                print msg > "/dev/stderr"
+                exit 1
+            }
+            for (i = 1; i <= n; i++) {
+                line = rows[i]
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+                nf = split(line, f, /[[:space:]]+/)
+                if (f[1] == "lib") {
+                    c1="lib"; c2=f[2]; c3=""; c4=""
+                    for (j=3; j<=nf; j++) c4 = (c4 == "" ? f[j] : c4 " " f[j])
+                } else {
+                    c1="sym"; c2=f[2]; c3=f[3]; c4=""
+                    for (j=4; j<=nf; j++) c4 = (c4 == "" ? f[j] : c4 " " f[j])
+                }
+                out[i,1]=c1; out[i,2]=c2; out[i,3]=c3; out[i,4]=c4
+                if (length(c1)>w1) w1=length(c1)
+                if (length(c2)>w2) w2=length(c2)
+                if (length(c3)>w3) w3=length(c3)
+                if (length(c4)>w4) w4=length(c4)
+            }
+            hdr1="TYPE"; hdr2="SONAME"; hdr3="SYMBOL"; hdr4="DETAILS"
+            if (length(hdr1)>w1) w1=length(hdr1)
+            if (length(hdr2)>w2) w2=length(hdr2)
+            if (length(hdr3)>w3) w3=length(hdr3)
+            if (length(hdr4)>w4) w4=length(hdr4)
+            fmt="%-" w1 "s  %-" w2 "s  %-" w3 "s  %-" w4 "s\n"
+            printf fmt, hdr1, hdr2, hdr3, hdr4
+            printf fmt, rep(w1,"-"), rep(w2,"-"), rep(w3,"-"), rep(w4,"-")
+            for (i=1; i<=n; i++) printf fmt, out[i,1], out[i,2], out[i,3], out[i,4]
+        }
+        function rep(n,ch,  s,i){ s=""; for(i=0;i<n;i++) s=s ch; return s }
+    ' "${table_path}" || return $?
+}
+
+cmd_lookup() {
+    if [[ $# -eq 0 ]]; then
+        err "'lookup' requires a subcommand: regen|check|show"
+        return 2
+    fi
+    case "$1" in
+        -h|--help)
+            lookup_usage
+            return 0
+            ;;
+        regen)
+            shift
+            cmd_lookup_regen "$@"
+            ;;
+        check)
+            shift
+            cmd_lookup_check "$@"
+            ;;
+        show)
+            shift
+            cmd_lookup_show "$@"
+            ;;
+        *)
+            err "unknown lookup subcommand '$1' (expected regen|check|show)"
+            return 2
+            ;;
+    esac
+}
+
 if [[ $# -eq 0 ]]; then
     err "missing subcommand (run 'newminhh --help' for usage)"
     exit 2
@@ -345,6 +655,9 @@ case "${SUBCMD}" in
         ;;
     vm)
         cmd_vm "$@"
+        ;;
+    lookup)
+        cmd_lookup "$@"
         ;;
     *)
         err "unknown subcommand '${SUBCMD}' (run 'newminhh --help' for usage)"

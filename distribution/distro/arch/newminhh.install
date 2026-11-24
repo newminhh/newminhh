@@ -4,6 +4,7 @@ post_install() {
     elif [ -x /usr/libexec/newminhh/binfmt-helper.sh ]; then
         /usr/libexec/newminhh/binfmt-helper.sh start 2>/dev/null || true
     fi
+    /usr/bin/newminhh-lookup-gen --system --quiet || echo "newminhh: lookup regen failed; using compiled-in base table" >&2
     echo "==> newminhh binfmt_misc handler installed."
     echo "==> To enable early execution in initramfs with mkinitcpio,"
     echo "==> add 'newminhh' to HOOKS=(...) in /etc/mkinitcpio.conf and re-run mkinitcpio -P."
